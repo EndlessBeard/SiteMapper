@@ -1,0 +1,419 @@
+{% extends 'site_mapper/base.html' %}
+
+{% block title %}{{ job.name }} - Site_Mapper2{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col">
+        <h1>{{ job.name }}</h1>
+        <p class="lead">Job Details and Progress</p>
+    </div>
+    <div class="col-auto">
+        {% if job.status == 'pending' %}
+            <a href="{% url 'site_mapper:job_start' job_id=job.id %}" class="btn btn-success">
+                Start Job
+            </a>
+            <a href="{% url 'site_mapper:job_delete' job_id=job.id %}" class="btn btn-danger ms-2" 
+               onclick="return confirm('Are you sure you want to delete this job? This action cannot be undone.')">
+                Delete Job
+            </a>
+        {% elif job.status == 'processing' %}
+            <a href="{% url 'site_mapper:job_stop' job_id=job.id %}" class="btn btn-warning" 
+               onclick="return confirm('Are you sure you want to stop this job?')">
+                Stop Job
+            </a>
+        {% elif job.status == 'completed' %}
+            <a href="{% url 'site_mapper:job_download' job_id=job.id %}" class="btn btn-primary me-2">
+                Download Results
+            </a>
+            <button class="btn btn-secondary me-2" onclick="showDocxFiles({{ job.id }})">
+                Generate DOCX
+            </button>
+            <a href="{% url 'site_mapper:job_delete' job_id=job.id %}" class="btn btn-danger" 
+               onclick="return confirm('Are you sure you want to delete this job? This action cannot be undone.')">
+                Delete Job
+            </a>
+        {% elif job.status == 'failed' %}
+            <a href="{% url 'site_mapper:job_delete' job_id=job.id %}" class="btn btn-danger" 
+               onclick="return confirm('Are you sure you want to delete this job? This action cannot be undone.')">
+                Delete Job
+            </a>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Job Information Card -->
+<div class="row mb-4">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5>Job Information</h5>
+            </div>
+            <div class="card-body">
+                <table class="table">
+                    <tr>
+                        <th style="width: 30%;">Status:</th>
+                        <td>
+                            {% if job.status == 'pending' %}
+                                <span class="badge bg-secondary">Pending</span>
+                            {% elif job.status == 'processing' %}
+                                <span class="badge bg-primary">Processing</span>
+                            {% elif job.status == 'completed' %}
+                                <span class="badge bg-success">Completed</span>
+                            {% elif job.status == 'failed' %}
+                                <span class="badge bg-danger">Failed</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    <tr>
+                        <th>Created:</th>
+                        <td>{{ job.created_at }}</td>
+                    </tr>
+                    <tr>
+                        <th>Last Updated:</th>
+                        <td>{{ job.updated_at }}</td>
+                    </tr>
+                    <tr>
+                        <th>Output File:</th>
+                        <td>{{ job.output_file }}</td>
+                    </tr>
+                    <tr>
+                        <th>Current Depth:</th>
+                        <td><span id="current-depth">{{ job.current_depth }}</span> of <span id="max-depth">{{ job.max_depth }}</span></td>
+                    </tr>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Stats Card (Replaced Progress Card) -->
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5>Job Statistics</h5>
+            </div>
+            <div class="card-body">
+                <table class="table">
+                    <tr>
+                        <th style="width: 30%;">Total Links:</th>
+                        <td><span id="total-links">{{ job.total_links }}</span></td>
+                    </tr>
+                    <tr>
+                        <th>Pages:</th>
+                        <td><span id="total-pages">{{ link_type_counts.page }}</span></td>
+                    </tr>
+                    <tr>
+                        <th>Documents:</th>
+                        <td><span id="total-documents">{{ total_documents }}</span></td>
+                    </tr>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Start URLs Card -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5>Start URLs</h5>
+            </div>
+            <div class="card-body">
+                <pre class="mb-0">{{ job.start_urls }}</pre>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Link List -->
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">Discovered Links</h5>
+                <span class="badge bg-primary" id="link-count">{% if links %}{{ links|length }}{% else %}0{% endif %}</span>
+            </div>
+            <div class="card-body">
+                {% if links %}
+                <div class="table-responsive">
+                    <table class="table table-striped table-hover">
+                        <thead>
+                            <tr>
+                                <th>Depth</th>
+                                <th>Type</th>
+                                <th>URL</th>
+                                <th>Text</th>
+                                <th>Processed</th>
+                            </tr>
+                        </thead>
+                        <tbody id="links-table">
+                            {% for link in links %}
+                            <tr>
+                                <td>{{ link.depth }}</td>
+                                <td>
+                                    {% if link.type == 'pdf' %}
+                                        <span class="badge bg-danger">PDF</span>
+                                    {% elif link.type == 'docx' %}
+                                        <span class="badge bg-primary">Word</span>
+                                    {% elif link.type == 'xlsx' %}
+                                        <span class="badge bg-success">Excel</span>
+                                    {% else %}
+                                        <span class="badge bg-secondary">Page</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <a href="{{ link.url }}" target="_blank">
+                                        {{ link.url|truncatechars:50 }}
+                                    </a>
+                                </td>
+                                <td>{{ link.link_text|default:"-"|truncatechars:50 }}</td>
+                                <td>
+                                    {% if link.processed %}
+                                        <span class="badge bg-success">Yes</span>
+                                    {% else %}
+                                        <span class="badge bg-secondary">No</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="alert alert-info" id="no-links-message">
+                    No links have been discovered yet.
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- DOCX Files Modal -->
+<div class="modal fade" id="docxFilesModal" tabindex="-1" aria-labelledby="docxFilesModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="docxFilesModalLabel">DOCX Files</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <div id="docxLoadingSpinner" class="text-center">
+          <div class="spinner-border" role="status">
+            <span class="visually-hidden">Loading...</span>
+          </div>
+          <p>Converting files to DOCX format...</p>
+        </div>
+        <div id="docxFilesList" class="d-none">
+          <div class="table-responsive">
+            <table class="table table-striped">
+              <thead>
+                <tr>
+                  <th>Filename</th>
+                  <th>Size</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="docxFilesTable">
+                <!-- Files will be added here dynamically -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div id="docxFilesError" class="alert alert-danger d-none"></div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const jobStatusBadge = document.querySelector('td span.badge'); // Get the status badge
+    const isProcessing = jobStatusBadge && jobStatusBadge.classList.contains('bg-primary');
+    
+    if (isProcessing) {
+        const jobId = {{ job.id }};
+        let statusInterval;
+        
+        function updateStatus() {
+            fetch(`{% url 'site_mapper:job_status' job_id=job.id %}`)
+                .then(response => {
+                    if (!response.ok) throw new Error('Network response error');
+                    return response.json();
+                })
+                .then(data => {
+                    // Update statistics
+                    const totalLinks = document.getElementById('total-links');
+                    const totalPages = document.getElementById('total-pages');
+                    const totalDocuments = document.getElementById('total-documents');
+                    const currentDepth = document.getElementById('current-depth');
+                    
+                    if (totalLinks) totalLinks.innerText = data.total_links;
+                    if (totalPages) totalPages.innerText = data.total_pages;
+                    if (totalDocuments) totalDocuments.innerText = data.total_documents;
+                    if (currentDepth) currentDepth.innerText = data.current_depth;
+                    
+                    // Update the status badge if status changed
+                    if (data.status && jobStatusBadge) {
+                        const statusMap = {
+                            'pending': { text: 'Pending', class: 'bg-secondary' },
+                            'processing': { text: 'Processing', class: 'bg-primary' },
+                            'completed': { text: 'Completed', class: 'bg-success' },
+                            'failed': { text: 'Failed', class: 'bg-danger' }
+                        };
+                        
+                        if (statusMap[data.status]) {
+                            // Update badge text and class
+                            jobStatusBadge.textContent = statusMap[data.status].text;
+                            jobStatusBadge.className = 'badge ' + statusMap[data.status].class;
+                            
+                            // If job is completed or failed, stop polling
+                            if (data.status === 'completed' || data.status === 'failed') {
+                                clearInterval(statusInterval);
+                                
+                                // Don't reload the page, just update the UI
+                                // Show download buttons if job completed
+                                if (data.status === 'completed') {
+                                    const actionsArea = document.querySelector('.row:first-child .col-auto');
+                                    if (actionsArea) {
+                                        actionsArea.innerHTML = `
+                                            <a href="{% url 'site_mapper:job_download' job_id=job.id %}" class="btn btn-primary me-2">
+                                                Download Results
+                                            </a>
+                                            <button class="btn btn-secondary me-2" onclick="showDocxFiles({{ job.id }})">
+                                                Generate DOCX
+                                            </button>
+                                            <a href="{% url 'site_mapper:job_delete' job_id=job.id %}" class="btn btn-danger" 
+                                               onclick="return confirm('Are you sure you want to delete this job? This action cannot be undone.')">
+                                                Delete Job
+                                            </a>
+                                        `;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    // Visual error indication
+                    const infoCard = document.querySelector('.card-header');
+                    if (infoCard) {
+                        const errorNotice = document.createElement('div');
+                        errorNotice.className = 'alert alert-warning mt-2 mb-0';
+                        errorNotice.textContent = 'Status update failed. Retrying...';
+                        infoCard.appendChild(errorNotice);
+                        
+                        // Remove after 3 seconds
+                        setTimeout(() => errorNotice.remove(), 3000);
+                    }
+                });
+        }
+        
+        // Initial update
+        updateStatus(); 
+        
+        // Then update every 5 seconds
+        statusInterval = setInterval(updateStatus, 5000);
+    }
+});
+
+
+// Store the correct URL for DOCX conversion for each job
+const docxConversionUrl = "{% url 'site_mapper:job_to_docx' job_id=job.id %}";
+
+
+// Function to show DOCX files in modal
+function showDocxFiles(jobId) {
+    // Get elements
+    const modal = new bootstrap.Modal(document.getElementById('docxFilesModal'));
+    const loadingSpinner = document.getElementById('docxLoadingSpinner');
+    const filesList = document.getElementById('docxFilesList');
+    const filesTable = document.getElementById('docxFilesTable');
+    const filesError = document.getElementById('docxFilesError');
+    
+    // Reset modal state
+    loadingSpinner.classList.remove('d-none');
+    filesList.classList.add('d-none');
+    filesError.classList.add('d-none');
+    filesError.textContent = '';
+    filesTable.innerHTML = '';
+    
+    // Show modal
+    modal.show();
+    
+    // Make AJAX request to get file list using the Django URL tag - but we need to use a workaround
+    // since this is JavaScript code and not directly processed by Django
+    fetch(docxConversionUrl.replace(/\/\d+\//, `/${jobId}/`))
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`HTTP error! Status: ${response.status}`);
+            }
+            return response.json();
+        })
+        .then(data => {
+            // Hide loading spinner
+            loadingSpinner.classList.add('d-none');
+            
+            if (data.success) {
+                // Update modal title with job name
+                document.getElementById('docxFilesModalLabel').textContent = `DOCX Files for ${data.job_name}`;
+                
+                if (data.files && data.files.length > 0) {
+                    // Show files list
+                    filesList.classList.remove('d-none');
+                    
+                    // Create a row for each file
+                    data.files.forEach(file => {
+                        const row = document.createElement('tr');
+                        
+                        // File name cell
+                        const nameCell = document.createElement('td');
+                        nameCell.textContent = file.name;
+                        row.appendChild(nameCell);
+                        
+                        // File size cell
+                        const sizeCell = document.createElement('td');
+                        sizeCell.textContent = file.size;
+                        row.appendChild(sizeCell);
+                        
+                        // Actions cell
+                        const actionsCell = document.createElement('td');
+                        const downloadLink = document.createElement('a');
+                        downloadLink.href = file.url;
+                        downloadLink.className = 'btn btn-sm btn-primary';
+                        downloadLink.innerHTML = '<i class="fas fa-download"></i> Download';
+                        actionsCell.appendChild(downloadLink);
+                        row.appendChild(actionsCell);
+                        
+                        filesTable.appendChild(row);
+                    });
+                } else {
+                    // No files found
+                    filesError.textContent = "No DOCX files were generated.";
+                    filesError.classList.remove('d-none');
+                }
+            } else {
+                // Show error
+                filesError.textContent = data.error || "An error occurred while generating DOCX files.";
+                filesError.classList.remove('d-none');
+            }
+        })
+        .catch(error => {
+            // Hide loading spinner
+            loadingSpinner.classList.add('d-none');
+            
+            // Show error
+            filesError.textContent = "Error: " + error.message;
+            filesError.classList.remove('d-none');
+            console.error('Error:', error);
+        });
+}
+</script>
+{% endblock %}

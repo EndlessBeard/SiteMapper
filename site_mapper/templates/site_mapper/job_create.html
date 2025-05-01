@@ -1,0 +1,86 @@
+{% extends 'site_mapper/base.html' %}
+
+{% block title %}Create Job - Site_Mapper2{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h1>Create New Mapping Job</h1>
+        <p class="lead">Configure a new website mapping job</p>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-body">
+                <form method="post">
+                    {% csrf_token %}
+                    
+                    <div class="mb-3">
+                        <label for="name" class="form-label">Job Name</label>
+                        <input type="text" class="form-control" id="name" name="name" required>
+                        <div class="form-text">A descriptive name for this mapping job</div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="start_urls" class="form-label">Start URLs</label>
+                        <textarea class="form-control" id="start_urls" name="start_urls" rows="5" required></textarea>
+                        <div class="form-text">Enter one URL per line. These are the starting points for mapping.</div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="output_file" class="form-label">Output Filename</label>
+                        <input type="text" class="form-control" id="output_file" name="output_file" value="site_map.json">
+                        <div class="form-text">Name of the output JSON file</div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="max_depth" class="form-label">Maximum Click Depth</label>
+                        <input type="number" class="form-control" id="max_depth" name="max_depth" value="3" min="1" max="10">
+                        <div class="form-text">Maximum number of clicks/levels to crawl from starting URLs</div>
+                    </div>
+                    
+                    <div class="d-grid gap-2">
+                        <button type="submit" class="btn btn-primary">Create Job</button>
+                        <a href="{% url 'site_mapper:dashboard' %}" class="btn btn-outline-secondary">Cancel</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header">
+                <h5>Job Information</h5>
+            </div>
+            <div class="card-body">
+                <p>The site mapping process is modular and works by click depth:</p>
+                
+                <h6>Depth Levels</h6>
+                <ul>
+                    <li><strong>Depth 0</strong>: The starting URLs you provide</li>
+                    <li><strong>Depth 1</strong>: Links found on the starting pages</li>
+                    <li><strong>Depth 2+</strong>: Links found on depth 1 pages, and so on</li>
+                </ul>
+                
+                <h6>For each depth level:</h6>
+                <ul>
+                    <li>Web pages are crawled for links</li>
+                    <li>Documents (PDFs, etc.) are downloaded and parsed</li>
+                    <li>New links are added to the next depth level</li>
+                    <li>Parent-child relationships are maintained</li>
+                    
+                </ul>
+                <h7>For Each Starting URL</h7>
+                <ul>
+                    <li>A seperate file will be saved with the URL name</li>
+
+                </ul>
+                
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,90 @@
+/* Site_Mapper2 Custom Styles */
+
+/* Dashboard Statistics */
+.card-stat {
+    border-radius: 10px;
+    transition: transform .2s;
+}
+
+.card-stat:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+}
+
+/* Job progress styles */
+.progress {
+    height: 25px;
+    border-radius: 5px;
+    background-color: #f0f0f0;
+}
+
+.progress-bar {
+    font-weight: bold;
+    font-size: 14px;
+}
+
+/* Link type badges */
+.badge-pdf {
+    background-color: #dc3545;
+}
+
+.badge-docx {
+    background-color: #0d6efd;
+}
+
+.badge-xlsx {
+    background-color: #198754;
+}
+
+/* Job detail page */
+.job-info-card {
+    margin-bottom: 20px;
+}
+
+/* Link table */
+.links-table {
+    font-size: 0.9rem;
+}
+
+.links-table .url-cell {
+    max-width: 300px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* Custom buttons */
+.btn-start {
+    background-color: #28a745;
+    color: white;
+}
+
+.btn-download {
+    background-color: #0d6efd;
+    color: white;
+}
+
+/* Pre-formatted text */
+pre {
+    background-color: #f8f9fa;
+    padding: 10px;
+    border-radius: 5px;
+    border: 1px solid #dee2e6;
+}
+
+/* Status indicator animation */
+.status-processing {
+    animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+    0% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.6;
+    }
+    100% {
+        opacity: 1;
+    }
+}
