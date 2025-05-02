@@ -48,7 +48,7 @@ def json_to_docx(json_path, docx_path=None):
     # Set default font and line spacing
     style = doc.styles['Normal']
     font = style.font
-    font.size = Pt(10)  # Set font size to 10pt
+    font.size = Pt(8)  # Set font size to 10pt
     paragraph_format = style.paragraph_format
     paragraph_format.line_spacing = Pt(11.0)  # Set line spacing to 0.75
     
@@ -99,11 +99,6 @@ def process_link(doc, link, links_by_parent, level):
 def add_link_heading(doc, link, level):
     """
     Add a link to the document as a heading with appropriate formatting.
-    
-    Args:
-        doc: The document
-        link: The link data
-        level: Heading level
     """
     # Don't go deeper than level 9 (Word's maximum heading level)
     if level > 9:
@@ -118,6 +113,11 @@ def add_link_heading(doc, link, level):
     # Create heading for this link
     heading = doc.add_heading('', level=level)
     
+    # Set indentation based on depth (0.25 inch per level)
+    depth = link.get('depth', 0)
+    paragraph_format = heading.paragraph_format
+    paragraph_format.left_indent = Inches(0.25 * depth)
+    
     # Add appropriate prefix based on link type with colored background
     prefix = ""
     if link_type == 'page':
@@ -129,18 +129,15 @@ def add_link_heading(doc, link, level):
     elif link_type in ['pdf', 'docx', 'xlsx', 'xls']:
         prefix = f"[{link_type.upper()}] "
         color_fill = "FFC000"  # Orange
-    elif link_type == 'other':
-        prefix = "[OTHER] "
-        color_fill = "CCCCCC"  # Gray for unknown types
     elif link_type == 'broken':
         prefix = "[BROKEN] "
-        color_fill = "FF0000"  # Red for broken links
+        color_fill = "FF0000"  # Red
     else:
         prefix = f"[{link_type.upper()}] "
         color_fill = "CCCCCC"  # Gray for unknown types
     
-    # Create a run for the prefix with colored background
-    run = heading.add_run(prefix)
+    # Add the prefix
+    heading.add_run(prefix)
     
     # Add the hyperlink
     add_hyperlink(heading, link_text, url)
@@ -148,6 +145,10 @@ def add_link_heading(doc, link, level):
     # Add depth information if available
     if 'depth' in link:
         heading.add_run(f" (Depth: {link['depth']})")
+    
+    # Add color fill to the entire heading paragraph
+    shading_elm = parse_xml(f'<w:shd {nsdecls("w")} w:fill="{color_fill}"/>')
+    heading._p.get_or_add_pPr().append(shading_elm)
 
 
 def process_page(doc, page, pages_by_parent, level):
@@ -706,26 +707,27 @@ def add_link_paragraph(doc, link, level=2):
     paragraph = doc.add_paragraph()
     paragraph.style = f'Heading {level}'
     
-    # Add indentation based on depth (4 spaces per level)
+    # Set indentation based on depth (0.25 inch per level)
     depth = link.get('depth', 0)
-    indent = ' ' * (4 * depth)  # 4 spaces per depth level
+    paragraph_format = paragraph.paragraph_format
+    paragraph_format.left_indent = Inches(0.25 * depth)
     
     # Add appropriate prefix based on link type
     prefix = ""
     if link_type == 'page':
-        prefix = f"{indent}[PAGE] "
+        prefix = "[PAGE] "
         color_fill = "92D050"  # Green
     elif link_type == 'external':
-        prefix = f"{indent}[EXTERNAL] "
+        prefix = "[EXTERNAL] "
         color_fill = "00B0F0"  # Blue
     elif link_type in ['pdf', 'docx', 'xlsx', 'xls']:
-        prefix = f"{indent}[{link_type.upper()}] "
+        prefix = f"[{link_type.upper()}] "
         color_fill = "FFC000"  # Orange
     elif link_type == 'broken':
-        prefix = f"{indent}[BROKEN] "
+        prefix = "[BROKEN] "
         color_fill = "FF0000"  # Red
     else:
-        prefix = f"{indent}[{link_type.upper()}] "
+        prefix = f"[{link_type.upper()}] "
         color_fill = "CCCCCC"  # Gray for unknown types
     
     # Add prefix

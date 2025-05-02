@@ -501,19 +501,33 @@ class SiteProcessor:
                     filename=filename
                 )
                 
-                if not file_path or not self._is_valid_content_type(file_path, expected_type):
-                    logger.warning(f"Failed to download or invalid content type for document: {url}")
+                #unused?
+                def _is_valid_content_type(self, file_path, expected_type):
+                    """
+                    Check if the downloaded file is of the expected content type.
                     
-                    # Mark as processed and set type to 'broken'
-                    link.processed = True
-                    link.type = 'broken'
-                    link.file_path = None  # Ensure no path for failed downloads
-                    link.save(update_fields=['processed', 'type', 'file_path'])
-                    
-                    # Increment processed counter
-                    self.job.processed_links += 1
-                    self.job.save(update_fields=['processed_links'])
-                    return
+                    Args:
+                        file_path (str): Path to the downloaded file
+                        expected_type (str): Expected type ('pdf', 'docx', 'xlsx')
+                        
+                    Returns:
+                        bool: True if file exists and matches expected type, False otherwise
+                    """
+                    if not os.path.exists(file_path):
+                        return False
+                        
+                    # Simple extension check
+                    if expected_type == 'pdf' and file_path.lower().endswith('.pdf'):
+                        return True
+                    elif expected_type == 'docx' and file_path.lower().endswith(('.docx', '.doc')):
+                        return True
+                    elif expected_type == 'xlsx' and file_path.lower().endswith(('.xlsx', '.xls')):
+                        return True
+                        
+                    # Could add more sophisticated content type checking here with libraries
+                    # like python-magic or checking file headers
+                        
+                    return False
                 
                 # Reload the link object to ensure it has a primary key
                 try:
