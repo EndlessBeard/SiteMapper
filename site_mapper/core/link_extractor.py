@@ -42,6 +42,9 @@ class LinkExtractor:
     # Regular expression pattern to match email addresses
     EMAIL_PATTERN = re.compile(r'^(?:mailto:)?[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$')
     
+    # Phone number patterns
+    PHONE_PATTERN = re.compile(r'^(?:tel:)?(?:\+?\d[\d\s\(\)-]*){5,}$')
+
     def __init__(self, base_url):
         """
         Initialize the LinkExtractor.
@@ -81,6 +84,11 @@ class LinkExtractor:
             # Check for email links and skip them
             if self._is_email_link(url):
                 logger.debug(f"Skipping email link: {url}")
+                continue
+            
+            # Check for phone links and skip them
+            if self._is_phone_link(url):
+                logger.debug(f"Skipping phone link: {url}")
                 continue
                 
             link_info = {
@@ -155,6 +163,26 @@ class LinkExtractor:
         # Check for email pattern using regex
         return bool(self.EMAIL_PATTERN.match(url))
     
+    def _is_phone_link(self, url):
+        """
+        Check if the URL is a phone link (tel: or contains a phone number pattern).
+        
+        Args:
+            url (str): URL to check
+            
+        Returns:
+            bool: True if it's a phone link, False otherwise
+        """
+        if not url:
+            return False
+            
+        # Check for tel: protocol
+        if url.startswith('tel:'):
+            return True
+        
+        # Check for phone pattern using regex (simple implementation)
+        return bool(self.PHONE_PATTERN.match(url))
+
     def _normalize_url(self, url):
         """
         Normalize a URL by resolving relative URLs and removing fragments.
