@@ -353,12 +353,23 @@ class SiteProcessor:
         # Determine if this is a page or document
         link_type = self._determine_link_type(url)
         
+        # Get the page title to use as link text (if it's a page)
+        link_text = None
+        if link_type == 'page':
+            try:
+                # Try to fetch just the title
+                _, page_title, _ = self.crawler.fetch_page(url)
+                if page_title:
+                    link_text = page_title
+            except:
+                pass
+        
         # Create link entry if it doesn't exist
         link_id = self.link_manager.add_link(
             url=url,
-            link_text=url,
+            link_text=link_text or url,  # Use page title if available, otherwise URL
             link_type=link_type,
-            parent_id=parent_id,  # Updated parameter name
+            parent_id=parent_id,
             depth=depth,
             starting_url=starting_url
         )
