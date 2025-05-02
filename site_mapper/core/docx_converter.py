@@ -14,7 +14,7 @@ import urllib.parse
 from django.conf import settings
 
 logger = logging.getLogger(__name__)
-
+color_fill = "FFC000"
 def json_to_docx(json_path, docx_path=None):
     """
     Convert a site map JSON file to a DOCX document with a structured outline
@@ -23,9 +23,6 @@ def json_to_docx(json_path, docx_path=None):
     Args:
         json_path (str): Path to the input JSON file
         docx_path (str): Path to save the output DOCX file (optional)
-    
-    Returns:
-        str: Path to the created DOCX file
     """
     # If docx_path is not provided, create one based on the json_path
     if not docx_path:
@@ -36,16 +33,6 @@ def json_to_docx(json_path, docx_path=None):
     try:
         with open(json_path, 'r', encoding='utf-8') as f:
             site_data = json.load(f)
-            
-        # Log the content of the JSON file for debugging
-        logger.debug(f"Loaded JSON data from {json_path}: {type(site_data)}")
-        if isinstance(site_data, list):
-            logger.debug(f"Found {len(site_data)} items in JSON list")
-        elif isinstance(site_data, dict):
-            logger.debug(f"JSON data keys: {site_data.keys()}")
-    except json.JSONDecodeError as e:
-        logger.error(f"Failed to parse JSON file {json_path}: {e}")
-        site_data = []
     except Exception as e:
         logger.error(f"Error loading JSON file {json_path}: {e}")
         site_data = []
@@ -53,137 +40,36 @@ def json_to_docx(json_path, docx_path=None):
     # Create new document
     doc = Document()
     
-    # Extract base URL from the filename
-    base_url = extract_url_from_filename(os.path.basename(json_path))
+    # Set page margins
+    section = doc.sections[0]
+    section.left_margin = Inches(0.1)
+    section.right_margin = Inches(0.1)
+    
+    # Set default font and line spacing
+    style = doc.styles['Normal']
+    font = style.font
+    font.size = Pt(10)  # Set font size to 10pt
+    paragraph_format = style.paragraph_format
+    paragraph_format.line_spacing = Pt(11.0)  # Set line spacing to 0.75
     
     # Add title
-    title = doc.add_heading(f'SITE MAP: {base_url}', level=0)
+    title = doc.add_heading('SITE MAP', level=0)
     title.alignment = WD_PARAGRAPH_ALIGNMENT.CENTER
     
     # Add document metadata
+    doc.add_paragraph(f"Source: {json_path}")
+    
+    # Add content (example structure)
     if isinstance(site_data, list):
-        doc.add_paragraph(f"Root URL: {base_url}")
-        doc.add_paragraph(f"Total Links: {len(site_data)}")
-    else:
-        doc.add_paragraph(f"Root URL: {site_data.get('root_url', base_url)}")
-        doc.add_paragraph(f"Created: {site_data.get('timestamp', 'N/A')}")
-        doc.add_paragraph(f"Total Links: {len(site_data.get('pages', []))}")
-    
-    # Add color legend with shaded backgrounds
-    doc.add_heading('Color Legend', level=1)
-    
-    # Create a table for the legend with colored backgrounds
-    legend_table = doc.add_table(rows=4, cols=1)
-    legend_table.style = 'Table Grid'
-    
-    # Internal links - green
-    cell = legend_table.rows[0].cells[0]
-    paragraph = cell.paragraphs[0]
-    run = paragraph.add_run("[PAGE] Internal Page Links")
-    shading_elm = parse_xml(f'<w:shd {nsdecls("w")} w:fill="92D050"/>')
-    cell._tc.get_or_add_tcPr().append(shading_elm)
-    
-    # External links - blue
-    cell = legend_table.rows[1].cells[0]
-    paragraph = cell.paragraphs[0]
-    run = paragraph.add_run("[EXTERNAL] External Links")
-    shading_elm = parse_xml(f'<w:shd {nsdecls("w")} w:fill="00B0F0"/>')
-    cell._tc.get_or_add_tcPr().append(shading_elm)
-    
-    # Resource links - orange
-    cell = legend_table.rows[2].cells[0]
-    paragraph = cell.paragraphs[0]
-    run = paragraph.add_run("[DOC] Resource Links (PDFs, DOCXs, etc.)")
-    shading_elm = parse_xml(f'<w:shd {nsdecls("w")} w:fill="FFC000"/>')
-    cell._tc.get_or_add_tcPr().append(shading_elm)
-    
-    # Broken links - red
-    cell = legend_table.rows[3].cells[0]
-    paragraph = cell.paragraphs[0]
-    run = paragraph.add_run("[BROKEN] Broken Links")
-    shading_elm = parse_xml(f'<w:shd {nsdecls("w")} w:fill="FF0000"/>')
-    cell._tc.get_or_add_tcPr().append(shading_elm)
-    
-    doc.add_paragraph()
-    
-    # Process site structure based on different possible JSON structures
-    try:
-        if not site_data:
-            doc.add_paragraph("No links found in the site map.")
-        elif isinstance(site_data, list):
-            # Create a list of all links
-            doc.add_heading('All Links', level=1)
-            
-            # First organize by depth if possible
-            links_by_depth = {}
-            for link in site_data:
-                if isinstance(link, dict) and 'url' in link:
-                    depth = link.get('depth', 0)
-                    if depth not in links_by_depth:
-                        links_by_depth[depth] = []
-                    links_by_depth[depth].append(link)
-            
-            # Now display links by depth
-            for depth in sorted(links_by_depth.keys()):
-                doc.add_heading(f'Depth {depth}', level=2)
-                for link in links_by_depth[depth]:
-                    add_link_paragraph(doc, link, 3)
-            
-            # If no links were organized by depth, show the flat list
-            if not links_by_depth:
-                for link in site_data:
-                    if isinstance(link, dict) and 'url' in link:
-                        add_link_paragraph(doc, link, 2)
-                
-        elif isinstance(site_data, dict) and 'pages' in site_data:
-            # Handle structured format with 'pages' key
-            pages = site_data['pages']
-            if pages:
-                # Check if we can build parent-child relationships
-                if any('parent_id' in page for page in pages if isinstance(page, dict)):
-                    # Create parent-child structure
-                    doc.add_heading('Site Structure', level=1)
-                    pages_by_parent = {}
-                    for page in pages:
-                        if isinstance(page, dict):
-                            parent_id = page.get('parent_id')
-                            if parent_id not in pages_by_parent:
-                                pages_by_parent[parent_id] = []
-                            pages_by_parent[parent_id].append(page)
-                    
-                    # Start with root pages (parent_id is None)
-                    root_pages = pages_by_parent.get(None, [])
-                    for root_page in root_pages:
-                        process_page(doc, root_page, pages_by_parent, 2)
-                else:
-                    # Just list all pages
-                    doc.add_heading('All Pages', level=1)
-                    for page in pages:
-                        if isinstance(page, dict) and 'url' in page:
-                            add_link_paragraph(doc, page, 2)
-            else:
-                doc.add_paragraph("No pages found in the site map.")
-        
-        else:
-            # Handle any other structure - just extract any links we can find
-            doc.add_heading('Links', level=1)
-            doc.add_paragraph("Site map in unknown format. Showing available links.")
-            
-            # Try to find any links in the structure
-            links_found = extract_links_from_data(site_data)
-            if links_found:
-                for link in links_found:
-                    add_link_paragraph(doc, link, 2)
-            else:
-                doc.add_paragraph("No links found in the site map data.")
-    
-    except Exception as e:
-        logging.error(f"Error processing site structure: {str(e)}", exc_info=True)
-        doc.add_paragraph(f"Error processing site structure: {str(e)}")
+        for item in site_data:
+            add_link_paragraph(doc, item, level=1)
+    elif isinstance(site_data, dict):
+        for key, value in site_data.items():
+            doc.add_heading(key, level=1)
+            doc.add_paragraph(str(value))
     
     # Save the document
     doc.save(docx_path)
-    
     return docx_path
 
 
@@ -243,9 +129,12 @@ def add_link_heading(doc, link, level):
     elif link_type in ['pdf', 'docx', 'xlsx', 'xls']:
         prefix = f"[{link_type.upper()}] "
         color_fill = "FFC000"  # Orange
+    elif link_type == 'other':
+        prefix = "[OTHER] "
+        color_fill = "CCCCCC"  # Gray for unknown types
     elif link_type == 'broken':
         prefix = "[BROKEN] "
-        color_fill = "FF0000"  # Red
+        color_fill = "FF0000"  # Red for broken links
     else:
         prefix = f"[{link_type.upper()}] "
         color_fill = "CCCCCC"  # Gray for unknown types
@@ -386,13 +275,16 @@ def process_job_to_docx(job_id):
         logger.warning(f"No site map JSON files found for job {job_id}")
         return []
     
-    # Convert each JSON file to DOCX
+    # Convert each JSON file to DOCX using the correct converter function
     docx_files = []
     for json_file in json_files:
         docx_file = json_file.replace('.json', '.docx')
         try:
             logger.info(f"Converting {json_file} to {docx_file}")
-            json_to_docx(json_file, docx_file)
+            # Use convert_json_to_docx instead of json_to_docx
+            filename = os.path.basename(json_file)
+            start_url = extract_url_from_filename(filename)
+            convert_json_to_docx(json_file, docx_file, start_url)
             docx_files.append(docx_file)
             logger.info(f"Successfully created {docx_file}")
         except Exception as e:
@@ -822,14 +714,19 @@ def add_link_paragraph(doc, link, level=2):
     prefix = ""
     if link_type == 'page':
         prefix = f"{indent}[PAGE] "
+        color_fill = "92D050"  # Green
     elif link_type == 'external':
         prefix = f"{indent}[EXTERNAL] "
+        color_fill = "00B0F0"  # Blue
     elif link_type in ['pdf', 'docx', 'xlsx', 'xls']:
         prefix = f"{indent}[{link_type.upper()}] "
+        color_fill = "FFC000"  # Orange
     elif link_type == 'broken':
         prefix = f"{indent}[BROKEN] "
+        color_fill = "FF0000"  # Red
     else:
         prefix = f"{indent}[{link_type.upper()}] "
+        color_fill = "CCCCCC"  # Gray for unknown types
     
     # Add prefix
     paragraph.add_run(prefix)
@@ -840,3 +737,7 @@ def add_link_paragraph(doc, link, level=2):
     # Add depth information if available
     if 'depth' in link:
         paragraph.add_run(f" (Depth: {link['depth']})")
+    
+    # Add color fill to the paragraph background
+    shading_elm = parse_xml(f'<w:shd {nsdecls("w")} w:fill="{color_fill}"/>')
+    paragraph._p.get_or_add_pPr().append(shading_elm)

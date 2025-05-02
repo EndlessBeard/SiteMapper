@@ -79,6 +79,10 @@ class LinkManager:
         Returns:
             UUID: UUID of the created or existing link
         """
+        if link_type not in ['page', 'pdf', 'docx', 'xlsx', 'other', 'broken']:
+            logger.warning(f"Invalid link type: {link_type}")
+            return None
+
         normalized_url = self._normalize_url(url)
         normalized_starting_url = self._normalize_url(starting_url) if starting_url else None
         
@@ -357,7 +361,7 @@ class LinkManager:
             node = {
                 'url': link.url,
                 'text': link.link_text,
-                'type': link.type,
+                'type': link.type if link.type != 'broken' else 'broken',  # Ensure 'broken' type is correctly exported
                 'depth': link.depth,
                 'processed': link.processed,
                 'file_path': link.file_path if link.file_path else None,

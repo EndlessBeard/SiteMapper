@@ -34,6 +34,7 @@ def dashboard(request):
         'docx': Link.objects.filter(type='docx').count(),
         'xlsx': Link.objects.filter(type='xlsx').count(),
         'page': Link.objects.filter(type='page').count(),
+        'broken': Link.objects.filter(type='broken').count(),  # Include broken type
         'total': Link.objects.count(),
         'processed': Link.objects.filter(processed=True).count(),
     }
@@ -44,6 +45,7 @@ def dashboard(request):
         job_link_counts[job.id] = {
             'total': Link.objects.filter(job=job).count(),
             'processed': Link.objects.filter(job=job, processed=True).count(),
+            'broken': Link.objects.filter(job=job, type='broken').count(),  # Include broken type per job
         }
     
     context = {
@@ -98,6 +100,7 @@ def job_detail(request, job_id):
         'docx': Link.objects.filter(job=job, type='docx').count(),
         'xlsx': Link.objects.filter(job=job, type='xlsx').count(),
         'page': Link.objects.filter(job=job, type='page').count(),
+        'broken': Link.objects.filter(job=job, type='broken').count(),  # Include broken type
     }
     
     # Count total documents (PDF, DOCX, XLSX)
@@ -108,7 +111,8 @@ def job_detail(request, job_id):
     for i in range(job.max_depth + 1):
         depth_counts[i] = {
             'total': Link.objects.filter(job=job, depth=i).count(),
-            'processed': Link.objects.filter(job=job, depth=i, processed=True).count()
+            'processed': Link.objects.filter(job=job, depth=i, processed=True).count(),
+            'broken': Link.objects.filter(job=job, depth=i, type='broken').count(),  # Include broken type by depth
         }
     
     if job.total_links > 0:
@@ -368,31 +372,65 @@ from django.contrib.auth.decorators import login_required
 @login_required
 @require_GET
 def job_status_api(request, job_id):
-    """API endpoint to get the current status of a job."""
+    """API endpoint to get the current status and progress of a job."""
     try:
-        # Remove the user filter here too
         job = SiteMapJob.objects.get(id=job_id)
-        
-        # Prepare the response data
+
+        # Calculate progress percentage
+        if job.total_links > 0:
+            progress_percent = int((job.processed_links / job.total_links) * 100)
+        else:
+            progress_percent = 0
+
+        # Count links by type for this job
+        link_type_counts = {
+            'pdf': Link.objects.filter(job=job, type='pdf').count(),
+            'docx': Link.objects.filter(job=job, type='docx').count(),
+            'xlsx': Link.objects.filter(job=job, type='xlsx').count(),
+            'page': Link.objects.filter(job=job, type='page').count(),
+            'broken': Link.objects.filter(job=job, type='broken').count(),  # Include broken type
+        }
+
+        # Count total documents (PDF, DOCX, XLSX)
+        total_documents = link_type_counts['pdf'] + link_type_counts['docx'] + link_type_counts['xlsx']
+
+        # Prepare the response data - including all necessary fields
         data = {
             'status': job.status,
-            'start_time': job.start_time.strftime('%Y-%m-%d %H:%M:%S') if job.start_time else None,
-            'end_time': job.end_time.strftime('%Y-%m-%d %H:%M:%S') if job.end_time else None,
+            'total_links': job.total_links,
+            'processed_links': job.processed_links,
+            'progress_percent': progress_percent,
+            'current_depth': job.current_depth,
+            'max_depth': job.max_depth,
+            'link_type_counts': link_type_counts,
+            'total_documents': total_documents,
+            'total_pages': link_type_counts['page'],
+            'total_broken': link_type_counts['broken'],  # Include broken count in API response
+            # Keep start/end times if needed, though they might not be set during processing
+            # 'start_time': job.start_time.strftime('%Y-%m-%d %H:%M:%S') if hasattr(job, 'start_time') and job.start_time else None,
+            # 'end_time': job.end_time.strftime('%Y-%m-%d %H:%M:%S') if hasattr(job, 'end_time') and job.end_time else None,
         }
-        
+
         # Add output files if job is completed
         if job.status == 'completed':
             output_dir = os.path.join(settings.MEDIA_ROOT, f'site_mapper/job_{job_id}')
             if os.path.exists(output_dir):
                 files = []
                 for file_name in os.listdir(output_dir):
+                    # Include both JSON and DOCX files
                     if file_name.startswith('site_map_') and (file_name.endswith('.json') or file_name.endswith('.docx')):
                         files.append({
                             'name': file_name,
                             'url': f'{settings.MEDIA_URL}site_mapper/job_{job_id}/{file_name}'
                         })
                 data['output_files'] = files
-        
+            else:
+                data['output_files'] = [] # Ensure the key exists even if dir is missing
+
         return JsonResponse(data)
     except SiteMapJob.DoesNotExist:
         return JsonResponse({'error': 'Job not found'}, status=404)
+    except Exception as e:
+        # Log the error for debugging
+        logging.error(f"Error in job_status_api for job {job_id}: {str(e)}")
+        return JsonResponse({'error': 'An internal error occurred'}, status=500)

@@ -7,23 +7,17 @@ from django.template.response import TemplateResponse
 from .models import Link, SiteMapJob
 from .core.site_processor import start_job_processing
 
-# Custom Admin for Links
+@admin.register(Link)
 class LinkAdmin(admin.ModelAdmin):
-    list_display = ('short_id', 'url', 'link_text', 'type', 'processed', 'created_at')
-    list_filter = ('type', 'processed', 'created_at')
-    search_fields = ('url', 'link_text')
-    readonly_fields = ('id', 'created_at')
-    
-    def short_id(self, obj):
-        return str(obj.id)[:8]
-    
-    short_id.short_description = 'UUID'
+    list_display = ('url', 'type', 'depth', 'processed', 'starting_url')
+    list_filter = ('type', 'processed', 'depth')
+    search_fields = ('url', 'starting_url')
 
-# Custom Admin for SiteMapJob with custom actions
+@admin.register(SiteMapJob)
 class SiteMapJobAdmin(admin.ModelAdmin):
-    list_display = ('name', 'status', 'created_at', 'progress', 'action_buttons')
+    list_display = ('name', 'status', 'total_links', 'processed_links', 'max_depth', 'current_depth', 'created_at')
     list_filter = ('status', 'created_at')
-    search_fields = ('name',)
+    search_fields = ('name', 'start_urls')
     readonly_fields = ('created_at', 'updated_at', 'total_links', 'processed_links')
     
     def progress(self, obj):
@@ -92,7 +86,3 @@ class SiteMapJobAdmin(admin.ModelAdmin):
             self.message_user(request, 'Job not found.')
         
         return HttpResponseRedirect(reverse('admin:site_mapper_sitemapjob_changelist'))
-
-# Register models with custom admin classes
-admin.site.register(Link, LinkAdmin)
-admin.site.register(SiteMapJob, SiteMapJobAdmin)

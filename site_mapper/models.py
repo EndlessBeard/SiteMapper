@@ -12,6 +12,7 @@ class Link(models.Model):
         ('docx', 'Word Document'),
         ('xlsx', 'Excel Document'),
         ('other', 'Other'),
+        ('broken', 'Broken Link'),  # Ensure 'broken' is included in validation
     ]
     
     id = models.UUIDField(primary_key=True, default=uuid_lib.uuid4, editable=False)

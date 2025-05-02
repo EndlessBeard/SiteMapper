@@ -26,9 +26,10 @@
             <a href="{% url 'site_mapper:job_download' job_id=job.id %}" class="btn btn-primary me-2">
                 Download Results
             </a>
-            <button class="btn btn-secondary me-2" onclick="showDocxFiles({{ job.id }})">
+            <button class="btn btn-secondary me-2 generate-docx-btn" onclick="showDocxFiles('{{ job.id }}')">
                 Generate DOCX
             </button>
+
             <a href="{% url 'site_mapper:job_delete' job_id=job.id %}" class="btn btn-danger" 
                onclick="return confirm('Are you sure you want to delete this job? This action cannot be undone.')">
                 Delete Job
@@ -106,6 +107,10 @@
                         <th>Documents:</th>
                         <td><span id="total-documents">{{ total_documents }}</span></td>
                     </tr>
+                    <tr>
+                        <th>Broken Links:</th>
+                        <td>{{ link_counts.broken }}</td>
+                    </tr>
                 </table>
             </div>
         </div>
@@ -158,6 +163,8 @@
                                         <span class="badge bg-primary">Word</span>
                                     {% elif link.type == 'xlsx' %}
                                         <span class="badge bg-success">Excel</span>
+                                    {% elif link.type == 'broken' %}
+                                        <span class="badge bg-warning">Broken</span>
                                     {% else %}
                                         <span class="badge bg-secondary">Page</span>
                                     {% endif %}
@@ -199,29 +206,30 @@
         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
       </div>
       <div class="modal-body">
-        <div id="docxLoadingSpinner" class="text-center">
-          <div class="spinner-border" role="status">
+        <!-- Loading spinner -->
+        <div id="docxLoadingSpinner" class="text-center my-5">
+          <div class="spinner-border text-primary" role="status">
             <span class="visually-hidden">Loading...</span>
           </div>
-          <p>Converting files to DOCX format...</p>
+          <p class="mt-2">Generating DOCX files... This may take a moment.</p>
         </div>
-        <div id="docxFilesList" class="d-none">
-          <div class="table-responsive">
-            <table class="table table-striped">
-              <thead>
-                <tr>
-                  <th>Filename</th>
-                  <th>Size</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody id="docxFilesTable">
-                <!-- Files will be added here dynamically -->
-              </tbody>
-            </table>
-          </div>
-        </div>
+        
+        <!-- Error message -->
         <div id="docxFilesError" class="alert alert-danger d-none"></div>
+        
+        <!-- Files list -->
+        <div id="docxFilesList" class="d-none">
+          <table class="table table-striped">
+            <thead>
+              <tr>
+                <th>Filename</th>
+                <th>Size</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="docxFilesTable"></tbody>
+          </table>
+        </div>
       </div>
       <div class="modal-footer">
         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
@@ -233,6 +241,7 @@
 
 {% block extra_js %}
 <script>
+let globalJobId;
 document.addEventListener('DOMContentLoaded', function() {
     const jobStatusBadge = document.querySelector('td span.badge'); // Get the status badge
     const isProcessing = jobStatusBadge && jobStatusBadge.classList.contains('bg-primary');
@@ -286,7 +295,7 @@ document.addEventListener('DOMContentLoaded', function() {
                                             <a href="{% url 'site_mapper:job_download' job_id=job.id %}" class="btn btn-primary me-2">
                                                 Download Results
                                             </a>
-                                            <button class="btn btn-secondary me-2" onclick="showDocxFiles({{ job.id }})">
+                                            <button class="btn btn-secondary me-2" onclick="showDocxFiles('{{ job.id }}')">
                                                 Generate DOCX
                                             </button>
                                             <a href="{% url 'site_mapper:job_delete' job_id=job.id %}" class="btn btn-danger" 
@@ -297,6 +306,14 @@ document.addEventListener('DOMContentLoaded', function() {
                                     }
                                 }
                             }
+                        }
+                    }
+
+                    if (data.status === 'stopped') {
+                        const stopButton = document.getElementById('stop-job-button');
+                        if (stopButton) {  // Only proceed if button exists
+                            stopButton.disabled = true;
+                            stopButton.innerText = 'Job Stopped';
                         }
                     }
                 })
@@ -415,5 +432,31 @@ function showDocxFiles(jobId) {
             console.error('Error:', error);
         });
 }
+
+function updateJobStatus(jobId) {
+    // Use the Django-generated URL with the jobId substituted
+    const url = jobStatusUrl.replace('${jobId}', jobId);
+    fetch(url)
+        .then(/* rest of your code */);
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    // Set the global variable
+    globalJobId = "{{ job.id|default:"null" }}";
+    
+    if (globalJobId === "null") {
+        console.error("Job ID is not defined.");
+    } else {
+        console.log("Job ID:", globalJobId);
+        
+        // Start the interval with the global variable
+        setInterval(() => updateJobStatus(globalJobId), 5000);
+    }
+});
+
+const jobStatusUrl = "{% url 'site_mapper:job_status' job_id=0 %}".replace('0', '${jobId}');
 </script>
+
+<!-- Add this hidden field to your template -->
+<input type="hidden" id="job-id-field" value="{{ job.id }}">
 {% endblock %}

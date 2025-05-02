@@ -68,7 +68,7 @@ cd /Users/rachelhoover/Desktop/Dave\ Projects/Site_Mapper2/SiteMapper/
 source venv/bin/activate
 
 # Run the development server
-python manage.py runserver
+python3 manage.py runserver
 ```
 
 The application will be accessible at http://127.0.0.1:8000/

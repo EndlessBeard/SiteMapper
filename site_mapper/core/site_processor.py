@@ -401,7 +401,14 @@ class SiteProcessor:
             
             if not soup:
                 logger.warning(f"Failed to fetch page: {url}")
-                self.link_manager.mark_as_processed(link.id)
+
+                # Mark as processed and set type to 'broken'
+                link.processed = True
+                link.type = 'broken'  # Change type to 'broken'
+                link.file_path = None  # Ensure no path for failed fetches
+
+                link.save(update_fields=['processed', 'type', 'file_path'])
+
                 return
             
             # Save the page content
@@ -494,25 +501,18 @@ class SiteProcessor:
                     filename=filename
                 )
                 
-                if not file_path:
-                    logger.warning(f"Failed to download document: {url}")
+                if not file_path or not self._is_valid_content_type(file_path, expected_type):
+                    logger.warning(f"Failed to download or invalid content type for document: {url}")
                     
-                    # Mark as processed but also flag as error in database
+                    # Mark as processed and set type to 'broken'
                     link.processed = True
+                    link.type = 'broken'
                     link.file_path = None  # Ensure no path for failed downloads
+                    link.save(update_fields=['processed', 'type', 'file_path'])
                     
-                    # Add a note to link_text field about the failure
-                    if not link.link_text or link.link_text == url:
-                        link.link_text = f"{url} [DOWNLOAD FAILED]"
-                    else:
-                        link.link_text += " [DOWNLOAD FAILED]"
-                        
-                    link.save(update_fields=['processed', 'file_path', 'link_text'])
-                    
-                    # Still increment the processed counter
+                    # Increment processed counter
                     self.job.processed_links += 1
                     self.job.save(update_fields=['processed_links'])
-                    
                     return
                 
                 # Reload the link object to ensure it has a primary key
