@@ -320,22 +320,21 @@ def job_to_docx(request, job_id):
             return JsonResponse({'success': False, 'error': str(e)})
 
 def job_stop(request, job_id):
-    """View to stop a running job."""
-    job = get_object_or_404(SiteMapJob, id=job_id)
-    
-    if job.status != 'processing':
-        messages.warning(request, f"Job '{job.name}' is not running.")
-        return redirect('site_mapper:job_detail', job_id=job.id)
-    
-    # Update job status to stopped (using 'pending' as we don't have a 'stopped' status)
-    job.status = 'pending'
-    job.save()
-    
-    # Kill any running processes for this job - here we're just changing the status
-    # If you have actual background processes, you might need to terminate them here
-    
-    messages.success(request, f"Job '{job.name}' has been stopped.")
-    return redirect('site_mapper:job_detail', job_id=job.id)
+    """Stop a running job"""
+    try:
+        job = SiteMapJob.objects.get(id=job_id)
+        
+        if job.status == 'processing':
+            job.status = 'stopped'
+            job.save(update_fields=['status'])
+            messages.success(request, f"Job '{job.name}' has been marked for stopping. It will stop at the next checkpoint.")
+        else:
+            messages.warning(request, f"Job '{job.name}' is not running (status: {job.status}).")
+            
+        return redirect('site_mapper:job_detail', job_id=job_id)
+    except SiteMapJob.DoesNotExist:
+        messages.error(request, "Job not found.")
+        return redirect('site_mapper:dashboard')
 
 def job_delete(request, job_id):
     """View to delete a job and its associated links."""

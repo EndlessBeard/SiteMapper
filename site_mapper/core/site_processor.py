@@ -133,9 +133,21 @@ class SiteProcessor:
             # Phase 1: Process starting URLs at depth 0
             self._process_starting_urls()
             
+            # Check if job has been requested to stop
+            job_refresh = SiteMapJob.objects.get(id=self.job_id)
+            if job_refresh.status == 'stopped':
+                logger.info(f"Job {self.job_id} was requested to stop. Halting processing.")
+                return
+            
             # Process each depth level iteratively until max_depth is reached or no more links to process
             current_depth = 1
             while current_depth <= self.job.max_depth:
+                # Check if job has been requested to stop
+                job_refresh = SiteMapJob.objects.get(id=self.job_id)
+                if job_refresh.status == 'stopped':
+                    logger.info(f"Job {self.job_id} was requested to stop. Halting processing.")
+                    return
+                    
                 self.job.current_depth = current_depth
                 self.job.save(update_fields=['current_depth'])
                 
@@ -167,9 +179,11 @@ class SiteProcessor:
                 self.link_manager.export_links_to_json(list(links), output_file)
                 logger.info(f"Exported links for starting URL {start_url} to {output_file}")
             
-            # Update job status
-            self.job.status = 'completed'
-            self.job.save(update_fields=['status'])
+            # Update job status only if not manually stopped
+            job_refresh = SiteMapJob.objects.get(id=self.job_id)
+            if job_refresh.status != 'stopped':
+                self.job.status = 'completed'
+                self.job.save(update_fields=['status'])
             
             logger.info(f"Job {self.job_id} completed successfully")
         except Exception as e:
@@ -482,7 +496,23 @@ class SiteProcessor:
                 
                 if not file_path:
                     logger.warning(f"Failed to download document: {url}")
-                    self.link_manager.mark_as_processed(link.id)
+                    
+                    # Mark as processed but also flag as error in database
+                    link.processed = True
+                    link.file_path = None  # Ensure no path for failed downloads
+                    
+                    # Add a note to link_text field about the failure
+                    if not link.link_text or link.link_text == url:
+                        link.link_text = f"{url} [DOWNLOAD FAILED]"
+                    else:
+                        link.link_text += " [DOWNLOAD FAILED]"
+                        
+                    link.save(update_fields=['processed', 'file_path', 'link_text'])
+                    
+                    # Still increment the processed counter
+                    self.job.processed_links += 1
+                    self.job.save(update_fields=['processed_links'])
+                    
                     return
                 
                 # Reload the link object to ensure it has a primary key
@@ -494,7 +524,8 @@ class SiteProcessor:
                 except Link.DoesNotExist:
                     logger.warning(f"Link not found when updating file path: {url}")
                     return
-            
+       
+
             # Parse the document
             doc_parser = DocumentParser(base_url=url)
             result = doc_parser.parse(file_path)
