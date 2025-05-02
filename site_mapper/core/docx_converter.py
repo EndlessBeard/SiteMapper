@@ -105,7 +105,7 @@ def add_link_heading(doc, link, level):
         level = 9
         
     url = link.get('url', '')
-    link_text = link.get('link_text', url) or url
+    link_text = link.get('text', url) or url
     
     # Determine link type and prefix
     link_type = link.get('type', 'page')
@@ -698,7 +698,7 @@ def add_link_paragraph(doc, link, level=2):
         return
         
     url = link.get('url', '')
-    link_text = link.get('link_text', url) or url
+    link_text = link.get('text', url) or url
     
     # Determine link type and prefix
     link_type = link.get('type', 'page')
