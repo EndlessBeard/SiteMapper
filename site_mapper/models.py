@@ -59,3 +59,13 @@ class SiteMapJob(models.Model):
     
     def __str__(self):
         return self.name
+    
+class SiteFilter(models.Model):
+    url = models.CharField(max_length=255)
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        ordering = ['url']
+    
+    def __str__(self):
+        return self.url

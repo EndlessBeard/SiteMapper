@@ -9,12 +9,13 @@ import os
 import json
 import time
 import logging
-from .models import SiteMapJob, Link
+from .models import SiteMapJob, Link, SiteFilter
 from .core.site_processor import SiteProcessor
 from .core.crawler import WebCrawler
 from .core.document_parser import DocumentParser
 from .core.docx_converter import json_to_docx, process_job_to_docx
 import tempfile
+import re
 
 def dashboard(request):
     """Main dashboard view showing active jobs and stats."""
@@ -47,12 +48,15 @@ def dashboard(request):
             'processed': Link.objects.filter(job=job, processed=True).count(),
             'broken': Link.objects.filter(job=job, type='broken').count(),  # Include broken type per job
         }
-    
+
+    filters = SiteFilter.objects.all()
+
     context = {
         'jobs': jobs,
         'status_counts': status_counts,
         'link_counts': link_counts,
         'job_link_counts': job_link_counts,
+        'filters': filters,
     }
     
     return render(request, 'site_mapper/dashboard.html', context)
@@ -434,3 +438,33 @@ def job_status_api(request, job_id):
         # Log the error for debugging
         logging.error(f"Error in job_status_api for job {job_id}: {str(e)}")
         return JsonResponse({'error': 'An internal error occurred'}, status=500)
+#Site Filters 
+def add_filter(request):
+    if request.method == 'POST':
+        url = request.POST.get('filter_url', '').strip()
+        if url:
+            # Normalize the URL (remove http://, www., etc.)
+            url = normalize_url(url)
+            SiteFilter.objects.get_or_create(url=url)
+            messages.success(request, f"Filter '{url}' added successfully.")
+        return redirect('site_mapper:dashboard')
+
+def delete_filter(request, filter_id):
+    if request.method == 'POST':
+        try:
+            filter_obj = SiteFilter.objects.get(id=filter_id)
+            url = filter_obj.url
+            filter_obj.delete()
+            messages.success(request, f"Filter '{url}' removed successfully.")
+        except SiteFilter.DoesNotExist:
+            messages.error(request, "Filter not found.")
+    return redirect('site_mapper:dashboard')
+
+def normalize_url(url):
+    """Normalize a URL for consistent filtering"""
+    url = url.lower()
+    # Remove protocol
+    url = re.sub(r'^https?://', '', url)
+    # Remove trailing slash
+    url = url.rstrip('/')
+    return url
