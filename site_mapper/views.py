@@ -441,12 +441,55 @@ def job_status_api(request, job_id):
 #Site Filters 
 def add_filter(request):
     if request.method == 'POST':
-        url = request.POST.get('filter_url', '').strip()
-        if url:
-            # Normalize the URL (remove http://, www., etc.)
-            url = normalize_url(url)
-            SiteFilter.objects.get_or_create(url=url)
-            messages.success(request, f"Filter '{url}' added successfully.")
+        input_text = request.POST.get('filter_url', '').strip()
+        
+        if input_text:
+            # Check if it's a comma-separated or line-break separated list
+            if ',' in input_text:
+                # Split by commas
+                urls = [url.strip() for url in input_text.split(',') if url.strip()]
+            else:
+                # Split by whitespace or treat as single URL
+                urls = [url.strip() for url in input_text.split() if url.strip()]
+            
+            # Process each URL
+            added_count = 0
+            existing_count = 0
+            for url in urls:
+                # Normalize the URL (remove http://, www., etc.)
+                url = normalize_url(url)
+                _, created = SiteFilter.objects.get_or_create(url=url)
+                if created:
+                    added_count += 1
+                else:
+                    existing_count += 1
+            
+            # Create appropriate message
+            message_parts = []
+            if added_count:
+                message_parts.append(f"{added_count} filter{'s' if added_count != 1 else ''} added")
+            if existing_count:
+                message_parts.append(f"{existing_count} already existed")
+            
+            message = ", ".join(message_parts) + "."
+            
+            # Handle AJAX request
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                filters = SiteFilter.objects.all()
+                
+                # Render the updated filter list
+                from django.template.loader import render_to_string
+                html = render_to_string('site_mapper/includes/filter_list.html', 
+                                      {'filters': filters}, request=request)
+                
+                return JsonResponse({
+                    'success': True,
+                    'message': message,
+                    'html': html
+                })
+            
+            messages.success(request, message)
+        
         return redirect('site_mapper:dashboard')
 
 def delete_filter(request, filter_id):

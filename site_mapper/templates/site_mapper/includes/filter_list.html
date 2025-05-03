@@ -1,0 +1,15 @@
+{% if filters %}
+  {% for filter in filters %}
+  <div class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
+    {{ filter.url }}
+    <form method="post" action="{% url 'site_mapper:delete_filter' filter.id %}" class="d-inline">
+      {% csrf_token %}
+      <button type="submit" class="btn btn-sm btn-outline-danger btn-icon" title="Delete filter">
+        <i class="bi bi-x"></i>
+      </button>
+    </form>
+  </div>
+  {% endfor %}
+{% else %}
+  <div class="list-group-item text-muted">No filters added yet</div>
+{% endif %}
