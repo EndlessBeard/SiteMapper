@@ -19,14 +19,13 @@ class LinkManager:
     """
     
     def __init__(self, job_id):
-        """
-        Initialize the LinkManager.
-        
-        Args:
-            job_id (int): ID of the SiteMapJob
-        """
+        """Initialize the LinkManager."""
         self.job_id = job_id
         self.job = SiteMapJob.objects.get(id=job_id)
+        
+        # Cache the filters for better performance
+        from site_mapper.models import SiteFilter
+        self.filters = list(SiteFilter.objects.values_list('url', flat=True))
     
     def _normalize_url(self, url):
         """
@@ -79,6 +78,18 @@ class LinkManager:
         Returns:
             UUID: UUID of the created or existing link
         """
+        if not url:
+            return None
+        
+        # For depth 0 starting URLs, don't apply filtering
+        if depth == 0:
+            # Process normally without filtering
+            pass
+        else:
+            # Apply filtering check
+            if self.should_filter_url(url):
+                return None
+
         if link_type not in ['page', 'pdf', 'docx', 'xlsx', 'other', 'broken']:
             logger.warning(f"Invalid link type: {link_type}")
             return None
@@ -164,19 +175,20 @@ class LinkManager:
             return None
     
     def add_links(self, links_data, parent_id=None, depth=0, starting_url=None):
-        """
-        Add multiple links to the link registry.
-        
-        Args:
-            links_data (list): List of link data dictionaries
-            parent_id (UUID, optional): UUID of parent link
-            depth (int): Depth level of these links
-            starting_url (str, optional): The starting URL these links belong to
-            
-        Returns:
-            int: Number of links added
-        """
+        """Add multiple links to the link registry."""
         added_count = 0
+        filtered_count = 0
+        
+        # Filter links before processing
+        filtered_links = []
+        for link_data in links_data:
+            url = link_data.get('url')
+            if url and not self.should_filter_url(url):
+                filtered_links.append(link_data)
+            else:
+                filtered_count += 1
+        
+        logger.info(f"Filtered {filtered_count} out of {len(links_data)} links")
         
         # If we don't have a starting_url but have a parent_id, try to get the parent's starting_url
         if not starting_url and parent_id:
@@ -184,19 +196,19 @@ class LinkManager:
                 parent = Link.objects.get(id=parent_id)
                 if parent.starting_url:
                     starting_url = parent.starting_url
-                    logger.debug(f"Using parent's starting_url: {starting_url} for {len(links_data)} links")
+                    logger.debug(f"Using parent's starting_url: {starting_url} for {len(filtered_links)} links")
             except Link.DoesNotExist:
                 logger.warning(f"Parent link {parent_id} not found when trying to determine starting_url")
         
         # If still no starting_url but at depth 0, these are starting URLs (their own starting_url)
-        if not starting_url and depth == 0 and links_data:
-            first_url = links_data[0].get('url')
+        if not starting_url and depth == 0 and filtered_links:
+            first_url = filtered_links[0].get('url')
             if first_url:
                 starting_url = first_url
                 logger.debug(f"Using link's own URL as starting_url since depth=0: {starting_url}")
         
         with transaction.atomic():
-            for link_data in links_data:
+            for link_data in filtered_links:
                 url = link_data.get('url')
                 link_text = link_data.get('text', '')
                 link_type = link_data.get('type', 'page')
@@ -216,7 +228,7 @@ class LinkManager:
                 ):
                     added_count += 1
         
-        logger.info(f"Added {added_count}/{len(links_data)} links at depth {depth}" + 
+        logger.info(f"Added {added_count}/{len(filtered_links)} links at depth {depth}" + 
                   (f" with starting_url {starting_url}" if starting_url else ""))
         return added_count
     
@@ -388,3 +400,18 @@ class LinkManager:
         
         result = {'roots': [build_node(root) for root in roots]}
         return result
+
+    def should_filter_url(self, url):
+        """Check if a URL should be filtered."""
+        if not url:
+            return False
+            
+        # Normalize the URL for consistent matching
+        normalized_url = self._normalize_url(url)
+        
+        # Check against cached filters
+        for filter_url in self.filters:
+            if filter_url in normalized_url:
+                return True
+                
+        return False

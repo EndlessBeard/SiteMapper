@@ -126,6 +126,9 @@ class SiteProcessor:
         Executes the modular approach with click depth tracking.
         """
         try:
+            # Initialize filter stats
+            filtered_links_count = 0
+            
             # Update job status
             self.job.status = 'processing'
             self.job.save(update_fields=['status'])
@@ -185,7 +188,7 @@ class SiteProcessor:
                 self.job.status = 'completed'
                 self.job.save(update_fields=['status'])
             
-            logger.info(f"Job {self.job_id} completed successfully")
+            logger.info(f"Job {self.job_id} completed successfully. Filtered {filtered_links_count} links.")
         except Exception as e:
             logger.error(f"Error processing job {self.job_id}: {e}")
             self.job.status = 'failed'
@@ -449,9 +452,17 @@ class SiteProcessor:
             link_extractor = LinkExtractor(base_url)
             extracted_links = link_extractor.extract_links(soup)
             
+            # Filter document links
+            filtered_docs = [link_data for link_data in extracted_links['documents'] 
+                             if not self.link_manager.should_filter_url(link_data['url'])]
+            
+            # Filter content links
+            filtered_content = [link_data for link_data in extracted_links['content'] 
+                               if not self.link_manager.should_filter_url(link_data['url'])]
+            
             # Add document links - they'll be at depth+1
             self.link_manager.add_links(
-                extracted_links['documents'], 
+                filtered_docs, 
                 parent_id=current_link_id,
                 depth=depth+1,
                 starting_url=starting_url
@@ -459,7 +470,7 @@ class SiteProcessor:
             
             # Add content links (excluding navigation) - they'll be at depth+1
             self.link_manager.add_links(
-                extracted_links['content'], 
+                filtered_content, 
                 parent_id=current_link_id,
                 depth=depth+1,
                 starting_url=starting_url
@@ -560,14 +571,15 @@ class SiteProcessor:
                 self.link_manager.mark_as_processed(link.id)
                 return
             
-            # Process found links - they'll be at depth+1
+            # Process found links - filter and then process at depth+1
             links_data = []
             for url_data in result['links']:
-                links_data.append({
-                    'url': url_data['url'],
-                    'text': url_data['text'],
-                    'type': self._determine_link_type(url_data['url'])
-                })
+                if not self.link_manager.should_filter_url(url_data['url']):
+                    links_data.append({
+                        'url': url_data['url'],
+                        'text': url_data['text'],
+                        'type': self._determine_link_type(url_data['url'])
+                    })
             
             # Add links to registry with the same starting_url
             self.link_manager.add_links(
